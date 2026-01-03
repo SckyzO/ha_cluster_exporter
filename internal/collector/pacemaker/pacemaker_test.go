@@ -32,7 +32,13 @@ func TestNewPacemakerCollectorChecksCrmMonExecutableBits(t *testing.T) {
 }
 
 func TestPacemakerCollector(t *testing.T) {
-	collector, err := NewCollector("../../../test/fake_crm_mon.sh", "../../../test/fake_cibadmin.sh", 10*time.Second, slog.New(slog.NewTextHandler(os.Stdout, nil)))
+	// Force Local time to UTC for deterministic test results
+	origLocal := time.Local
+	time.Local = time.UTC
+	defer func() { time.Local = origLocal }()
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	collector, err := NewCollector("../../../test/fake_crm_mon.sh", "../../../test/fake_cibadmin.sh", 10*time.Second, logger)
 
 	assert.Nil(t, err)
 	assertcustom.Metrics(t, collector, "../../../test/pacemaker.metrics")
