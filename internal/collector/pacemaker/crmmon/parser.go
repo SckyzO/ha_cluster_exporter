@@ -3,10 +3,9 @@ package crmmon
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 	"os/exec"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 type Parser interface {
@@ -24,12 +23,12 @@ func (c *crmMonParser) Parse() (crmMon Root, err error) {
 
 	crmMonXML, err := exec.CommandContext(ctx, c.crmMonPath, "-X", "--inactive").Output()
 	if err != nil {
-		return crmMon, errors.Wrap(err, "error while executing crm_mon")
+		return crmMon, fmt.Errorf("error while executing crm_mon: %w", err)
 	}
 
 	err = xml.Unmarshal(crmMonXML, &crmMon)
 	if err != nil {
-		return crmMon, errors.Wrap(err, "error while parsing crm_mon XML output")
+		return crmMon, fmt.Errorf("error while parsing crm_mon XML output: %w", err)
 	}
 
 	return crmMon, nil

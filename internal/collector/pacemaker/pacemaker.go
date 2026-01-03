@@ -1,6 +1,8 @@
 package pacemaker
 
 import (
+	"fmt"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -10,18 +12,15 @@ import (
 	"github.com/ClusterLabs/ha_cluster_exporter/internal/collector/pacemaker/cib"
 	"github.com/ClusterLabs/ha_cluster_exporter/internal/collector/pacemaker/crmmon"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 const subsystem = "pacemaker"
 
-func NewCollector(crmMonPath string, cibAdminPath string, timeout time.Duration, logger log.Logger) (*pacemakerCollector, error) {
+func NewCollector(crmMonPath string, cibAdminPath string, timeout time.Duration, logger *slog.Logger) (*pacemakerCollector, error) {
 	err := collector.CheckExecutables(crmMonPath, cibAdminPath)
 	if err != nil {
-		level.Warn(logger).Log("msg", "could not initialize 'pacemaker' collector (missing executables), but continuing", "err", err)
+		logger.Warn("could not initialize 'pacemaker' collector (missing executables), but continuing", "err", err)
 	}
 
 	c := &pacemakerCollector{
@@ -49,16 +48,16 @@ type pacemakerCollector struct {
 }
 
 func (c *pacemakerCollector) CollectWithError(ch chan<- prometheus.Metric) error {
-	level.Debug(c.Logger).Log("msg", "Collecting pacemaker metrics...")
+	c.Logger.Debug("Collecting pacemaker metrics...")
 
 	crmMon, err := c.crmMonParser.Parse()
 	if err != nil {
-		return errors.Wrap(err, "crm_mon parser error")
+		return fmt.Errorf("crm_mon parser error: %w", err)
 	}
 
 	CIB, err := c.cibParser.Parse()
 	if err != nil {
-		return errors.Wrap(err, "cibadmin parser error")
+		return fmt.Errorf("cibadmin parser error: %w", err)
 	}
 
 	c.recordStonithStatus(crmMon, ch)
@@ -72,18 +71,18 @@ func (c *pacemakerCollector) CollectWithError(ch chan<- prometheus.Metric) error
 
 	err = c.recordCibLastChange(crmMon, ch)
 	if err != nil {
-		return errors.Wrap(err, "could not record CIB last change")
+		return fmt.Errorf("could not record CIB last change: %w", err)
 	}
 
 	return nil
 }
 
 func (c *pacemakerCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.Logger).Log("msg", "Collecting pacemaker metrics...")
+	c.Logger.Debug("Collecting pacemaker metrics...")
 
 	err := c.CollectWithError(ch)
 	if err != nil {
-		level.Warn(c.Logger).Log("msg", c.GetSubsystem()+" collector scrape failed", "err", err)
+		c.Logger.Warn(c.GetSubsystem()+" collector scrape failed", "err", err)
 	}
 }
 
@@ -215,7 +214,7 @@ func (c *pacemakerCollector) recordFailCounts(crmMon crmmon.Root, ch chan<- prom
 func (c *pacemakerCollector) recordCibLastChange(crmMon crmmon.Root, ch chan<- prometheus.Metric) error {
 	t, err := time.Parse(time.ANSIC, crmMon.Summary.LastChange.Time)
 	if err != nil {
-		return errors.Wrap(err, "could not parse date")
+		return fmt.Errorf("could not parse date: %w", err)
 	}
 	// we record the timestamp of the last change as a float counter metric
 	ch <- c.MakeCounterMetric("config_last_change", float64(t.Unix()))

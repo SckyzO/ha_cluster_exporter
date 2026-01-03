@@ -3,6 +3,8 @@ package drbd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -10,9 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ClusterLabs/ha_cluster_exporter/internal/collector"
@@ -50,10 +49,10 @@ type drbdStatus struct {
 	} `json:"connections"`
 }
 
-func NewCollector(drbdSetupPath string, drbdSplitBrainPath string, timeout time.Duration, logger log.Logger) (*drbdCollector, error) {
+func NewCollector(drbdSetupPath string, drbdSplitBrainPath string, timeout time.Duration, logger *slog.Logger) (*drbdCollector, error) {
 	err := collector.CheckExecutables(drbdSetupPath)
 	if err != nil {
-		level.Warn(logger).Log("msg", "could not initialize 'drbd' collector (missing executables), but continuing", "err", err)
+		logger.Warn("could not initialize 'drbd' collector (missing executables), but continuing", "err", err)
 	}
 
 	c := &drbdCollector{
@@ -90,7 +89,7 @@ type drbdCollector struct {
 }
 
 func (c *drbdCollector) CollectWithError(ch chan<- prometheus.Metric) error {
-	level.Debug(c.Logger).Log("msg", "Collecting DRBD metrics...")
+	c.Logger.Debug("Collecting DRBD metrics...")
 
 	c.recordDrbdSplitBrainMetric(ch)
 
@@ -99,12 +98,12 @@ func (c *drbdCollector) CollectWithError(ch chan<- prometheus.Metric) error {
 
 	drbdStatusRaw, err := exec.CommandContext(ctx, c.drbdsetupPath, "status", "--json").Output()
 	if err != nil {
-		return errors.Wrap(err, "drbdsetup command failed")
+		return fmt.Errorf("drbdsetup command failed: %w", err)
 	}
 	// populate structs and parse relevant info we will expose via metrics
 	drbdDev, err := parseDrbdStatus(drbdStatusRaw)
 	if err != nil {
-		return errors.Wrap(err, "could not parse drbdsetup status output")
+		return fmt.Errorf("could not parse drbdsetup status output: %w", err)
 	}
 
 	for _, resource := range drbdDev {
@@ -125,13 +124,13 @@ func (c *drbdCollector) CollectWithError(ch chan<- prometheus.Metric) error {
 			}
 		}
 		if len(resource.Connections) == 0 {
-			level.Warn(c.Logger).Log("msg", "Could not retrieve connection info for resource "+resource.Name, "err", err)
+			c.Logger.Warn("Could not retrieve connection info for resource "+resource.Name, "err", err)
 			continue
 		}
 		// a Resource can have multiple connection with different nodes
 		for _, conn := range resource.Connections {
 			if len(conn.PeerDevices) == 0 {
-				level.Warn(c.Logger).Log("msg", "Could not retrieve any peer device info for connection "+resource.Name, "err", err)
+				c.Logger.Warn("Could not retrieve any peer device info for connection "+resource.Name, "err", err)
 				continue
 			}
 			for _, peerDev := range conn.PeerDevices {
@@ -149,11 +148,11 @@ func (c *drbdCollector) CollectWithError(ch chan<- prometheus.Metric) error {
 }
 
 func (c *drbdCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.Logger).Log("msg", "Collecting DRBD metrics...")
+	c.Logger.Debug("Collecting DRBD metrics...")
 
 	err := c.CollectWithError(ch)
 	if err != nil {
-		level.Warn(c.Logger).Log("msg", c.GetSubsystem()+" collector scrape failed", "err", err)
+		c.Logger.Warn(c.GetSubsystem()+" collector scrape failed", "err", err)
 	}
 }
 

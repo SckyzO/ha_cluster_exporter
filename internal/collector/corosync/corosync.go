@@ -2,12 +2,11 @@ package corosync
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"os/exec"
 	"time"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ClusterLabs/ha_cluster_exporter/internal/collector"
@@ -15,10 +14,10 @@ import (
 
 const subsystem = "corosync"
 
-func NewCollector(cfgToolPath string, quorumToolPath string, timeout time.Duration, logger log.Logger) (*corosyncCollector, error) {
+func NewCollector(cfgToolPath string, quorumToolPath string, timeout time.Duration, logger *slog.Logger) (*corosyncCollector, error) {
 	err := collector.CheckExecutables(cfgToolPath, quorumToolPath)
 	if err != nil {
-		level.Warn(logger).Log("msg", "could not initialize 'corosync' collector (missing executables), but continuing", "err", err)
+		logger.Warn("could not initialize 'corosync' collector (missing executables), but continuing", "err", err)
 	}
 
 	c := &corosyncCollector{
@@ -46,7 +45,7 @@ type corosyncCollector struct {
 }
 
 func (c *corosyncCollector) CollectWithError(ch chan<- prometheus.Metric) error {
-	level.Debug(c.Logger).Log("msg", "Collecting corosync metrics...")
+	c.Logger.Debug("Collecting corosync metrics...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
@@ -57,7 +56,7 @@ func (c *corosyncCollector) CollectWithError(ch chan<- prometheus.Metric) error 
 
 	status, err := c.parser.Parse(cfgToolOutput, quorumToolOutput)
 	if err != nil {
-		return errors.Wrap(err, "corosync parser error")
+		return fmt.Errorf("corosync parser error: %w", err)
 	}
 
 	c.collectRings(status, ch)
@@ -70,11 +69,11 @@ func (c *corosyncCollector) CollectWithError(ch chan<- prometheus.Metric) error 
 }
 
 func (c *corosyncCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.Logger).Log("msg", "Collecting corosync metrics...")
+	c.Logger.Debug("Collecting corosync metrics...")
 
 	err := c.CollectWithError(ch)
 	if err != nil {
-		level.Warn(c.Logger).Log("msg", c.GetSubsystem()+" collector scrape failed", "err", err)
+		c.Logger.Warn(c.GetSubsystem()+" collector scrape failed", "err", err)
 	}
 }
 

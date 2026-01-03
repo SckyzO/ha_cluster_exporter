@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"log/slog"
 	"os"
 	"os/exec"
 	"regexp"
@@ -11,9 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ClusterLabs/ha_cluster_exporter/internal/collector"
@@ -25,10 +23,10 @@ const SBD_STATUS_UNHEALTHY = "unhealthy"
 const SBD_STATUS_HEALTHY = "healthy"
 
 // NewCollector create a new sbd collector
-func NewCollector(sbdPath string, sbdConfigPath string, timeout time.Duration, logger log.Logger) (*sbdCollector, error) {
+func NewCollector(sbdPath string, sbdConfigPath string, timeout time.Duration, logger *slog.Logger) (*sbdCollector, error) {
 	err := checkArguments(sbdPath, sbdConfigPath)
 	if err != nil {
-		level.Warn(logger).Log("msg", "could not initialize 'sbd' collector (missing executables or config), but continuing", "err", err)
+		logger.Warn("could not initialize 'sbd' collector (missing executables or config), but continuing", "err", err)
 	}
 
 	c := &sbdCollector{
@@ -49,7 +47,7 @@ func checkArguments(sbdPath string, sbdConfigPath string) error {
 		return err
 	}
 	if _, err := os.Stat(sbdConfigPath); os.IsNotExist(err) {
-		return errors.Errorf("'%s' does not exist", sbdConfigPath)
+		return fmt.Errorf("'%s' does not exist", sbdConfigPath)
 	}
 	return nil
 }
@@ -62,7 +60,7 @@ type sbdCollector struct {
 }
 
 func (c *sbdCollector) CollectWithError(ch chan<- prometheus.Metric) error {
-	level.Debug(c.Logger).Log("msg", "Collecting pacemaker metrics...")
+	c.Logger.Debug("Collecting pacemaker metrics...")
 
 	sbdConfiguration, err := readSdbFile(c.sbdConfigPath)
 	if err != nil {
@@ -89,11 +87,11 @@ func (c *sbdCollector) CollectWithError(ch chan<- prometheus.Metric) error {
 }
 
 func (c *sbdCollector) Collect(ch chan<- prometheus.Metric) {
-	level.Debug(c.Logger).Log("msg", "Collecting pacemaker metrics...")
+	c.Logger.Debug("Collecting pacemaker metrics...")
 
 	err := c.CollectWithError(ch)
 	if err != nil {
-		level.Warn(c.Logger).Log("msg", c.GetSubsystem()+" collector scrape failed", "err", err)
+		c.Logger.Warn(c.GetSubsystem()+" collector scrape failed", "err", err)
 	}
 }
 
