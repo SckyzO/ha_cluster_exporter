@@ -14,6 +14,9 @@ PROMU_URL     := https://github.com/prometheus/promu/releases/download/v$(PROMU_
 
 # this is the what ends up in the RPM "Version" field and embedded in the --version CLI flag
 VERSION ?= $(shell .ci/get_version_from_git.sh)
+ifeq ($(VERSION),)
+	VERSION := 0.0.0-dev
+endif
 
 # if you want to release to OBS, this must be a remotely available Git reference
 REVISION ?= $(shell git rev-parse --abbrev-ref HEAD)
