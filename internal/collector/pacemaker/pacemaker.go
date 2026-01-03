@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ClusterLabs/ha_cluster_exporter/collector"
-	"github.com/ClusterLabs/ha_cluster_exporter/collector/pacemaker/cib"
-	"github.com/ClusterLabs/ha_cluster_exporter/collector/pacemaker/crmmon"
+	"github.com/ClusterLabs/ha_cluster_exporter/internal/collector"
+	"github.com/ClusterLabs/ha_cluster_exporter/internal/collector/pacemaker/cib"
+	"github.com/ClusterLabs/ha_cluster_exporter/internal/collector/pacemaker/crmmon"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"

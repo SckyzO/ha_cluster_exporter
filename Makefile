@@ -56,7 +56,7 @@ $(ARCHS):
 	GOOS=linux GOARCH=$@ $(PROMU) build --config .promu.release.yml --prefix=build/bin ha_cluster_exporter-$@
 
 install:
-	$(GO) install
+	$(GO) install ./cmd/ha_cluster_exporter
 
 static-checks: vet-check fmt-check
 

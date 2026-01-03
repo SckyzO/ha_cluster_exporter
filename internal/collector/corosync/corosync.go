@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/ClusterLabs/ha_cluster_exporter/collector"
+	"github.com/ClusterLabs/ha_cluster_exporter/internal/collector"
 )
 
 const subsystem = "corosync"
