@@ -212,7 +212,7 @@ func (c *pacemakerCollector) recordFailCounts(crmMon crmmon.Root, ch chan<- prom
 }
 
 func (c *pacemakerCollector) recordCibLastChange(crmMon crmmon.Root, ch chan<- prometheus.Metric) error {
-	t, err := time.Parse(time.ANSIC, crmMon.Summary.LastChange.Time)
+	t, err := time.ParseInLocation(time.ANSIC, crmMon.Summary.LastChange.Time, time.Local)
 	if err != nil {
 		return fmt.Errorf("could not parse date: %w", err)
 	}
