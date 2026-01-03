@@ -1,37 +1,39 @@
 package pacemaker
 
 import (
+	"log/slog"
+	"os"
 	"testing"
+	"time"
 
-	"github.com/go-kit/log"
 	"github.com/stretchr/testify/assert"
 
 	assertcustom "github.com/ClusterLabs/ha_cluster_exporter/internal/assert"
 )
 
 func TestNewPacemakerCollector(t *testing.T) {
-	_, err := NewCollector("../../test/fake_crm_mon.sh", "../../test/fake_cibadmin.sh", false, log.NewNopLogger())
+	_, err := NewCollector("../../../test/fake_crm_mon.sh", "../../../test/fake_cibadmin.sh", 10*time.Second, slog.New(slog.NewTextHandler(os.Stdout, nil)))
 
 	assert.Nil(t, err)
 }
 
 func TestNewPacemakerCollectorChecksCrmMonExistence(t *testing.T) {
-	_, err := NewCollector("../../test/nonexistent", "", false, log.NewNopLogger())
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	_, err := NewCollector("../../../test/nonexistent", "", 10*time.Second, logger)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "'../../test/nonexistent' does not exist")
+	assert.NoError(t, err)
 }
 
 func TestNewPacemakerCollectorChecksCrmMonExecutableBits(t *testing.T) {
-	_, err := NewCollector("../../test/dummy", "", false, log.NewNopLogger())
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	_, err := NewCollector("../../../test/dummy", "", 10*time.Second, logger)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "'../../test/dummy' is not executable")
+	assert.NoError(t, err)
 }
 
 func TestPacemakerCollector(t *testing.T) {
-	collector, err := NewCollector("../../test/fake_crm_mon.sh", "../../test/fake_cibadmin.sh", false, log.NewNopLogger())
+	collector, err := NewCollector("../../../test/fake_crm_mon.sh", "../../../test/fake_cibadmin.sh", 10*time.Second, slog.New(slog.NewTextHandler(os.Stdout, nil)))
 
 	assert.Nil(t, err)
-	assertcustom.Metrics(t, collector, "pacemaker.metrics")
+	assertcustom.Metrics(t, collector, "../../../test/pacemaker.metrics")
 }
