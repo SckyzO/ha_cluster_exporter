@@ -28,6 +28,9 @@ REPOSITORY ?= clusterlabs/ha_cluster_exporter
 # the Go archs we crosscompile to
 ARCHS ?= amd64 arm64 ppc64le s390x
 
+DOCKER_IMAGE_NAME ?= ha_cluster_exporter
+DOCKER_IMAGE_TAG  ?= $(VERSION)
+
 default: clean mod-tidy generate fmt vet-check test build
 
 promu-prepare: 
@@ -42,43 +45,24 @@ $(PROMU):
 	cp $(PROMU_TMP)/promu-$(PROMU_VERSION).$(GO_BUILD_PLATFORM)/promu $(FIRST_GOPATH)/bin/promu
 	rm -r $(PROMU_TMP)
 
-build:
-	$(MAKE) clean
-	$(MAKE) promu-prepare $(PROMU)
-	$(MAKE) amd64
+build: promu-prepare $(PROMU)
+	$(PROMU) build --config .promu.release.yml --prefix=build/bin ha_cluster_exporter-amd64
 
-build-all:
-	$(MAKE) clean
-	$(MAKE) promu-prepare $(PROMU)
-	$(MAKE) $(ARCHS)
+build-all: clean promu-prepare $(PROMU) $(ARCHS)
 
 $(ARCHS):
 	GOOS=linux GOARCH=$@ $(PROMU) build --config .promu.release.yml --prefix=build/bin ha_cluster_exporter-$@
 
+docker: build
+	docker build -t $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG) .
+
+lint:
+	golangci-lint run ./...
+
 install:
 	$(GO) install ./cmd/ha_cluster_exporter
 
-static-checks: vet-check fmt-check
-
-vet-check:
-	$(GO) vet ./...
-
-fmt:
-	$(GO) fmt ./...
-
-mod-tidy:
-	$(GO) mod tidy
-
-fmt-check:
-	.ci/go_lint.sh
-
-generate:
-	$(GO) generate ./...
-
-test:
-	$(GO) test -v ./...
-
-checks: static-checks test
+static-checks: vet-check fmt-check lint
 
 coverage:
 	@mkdir -p build
