@@ -18,16 +18,14 @@ type DefaultCollector struct {
 	subsystem   string
 	descriptors map[string]*prometheus.Desc
 	Clock       clock.Clock
-	timestamps  bool
 	Logger      log.Logger
 }
 
-func NewDefaultCollector(subsystem string, timestamps bool, logger log.Logger) DefaultCollector {
+func NewDefaultCollector(subsystem string, logger log.Logger) DefaultCollector {
 	return DefaultCollector{
 		subsystem,
 		make(map[string]*prometheus.Desc),
 		&clock.SystemClock{},
-		timestamps,
 		logger,
 	}
 }
@@ -70,11 +68,7 @@ func (c *DefaultCollector) MakeCounterMetric(name string, value float64, labelVa
 
 func (c *DefaultCollector) makeMetric(name string, value float64, valueType prometheus.ValueType, labelValues ...string) prometheus.Metric {
 	desc := c.GetDescriptor(name)
-	metric := prometheus.MustNewConstMetric(desc, valueType, value, labelValues...)
-	if c.timestamps == true {
-		metric = prometheus.NewMetricWithTimestamp(c.Clock.Now(), metric)
-	}
-	return metric
+	return prometheus.MustNewConstMetric(desc, valueType, value, labelValues...)
 }
 
 // check that all the given paths exist and are executable files

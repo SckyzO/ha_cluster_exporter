@@ -110,18 +110,15 @@ web.config.file                            | Path to a [web configuration file](
 log.level                                  | Logging verbosity (default `info`).
 version                                    | Print the version information.
 
-##### Deprecated Flags
-Name                                       | Description
-----                                       | -----------
-address                                    | deprecated: please use --web.listen-address or --web.config.file to use Prometheus Exporter Toolkit
-port                                       | deprecated: please use --web.listen-address or --web.config.file to use Prometheus Exporter Toolkit
-log-level                                  | deprecated: please use log.level
-enable-timestamps                          | deprecated: server-side metric timestamping is discouraged by Prometheus best-practices and should be avoided
-
 #### Collector Flags
 
 Name                                       | Description
 ----                                       | -----------
+collector.pacemaker                        | Enable the Pacemaker collector (default: enabled).
+collector.corosync                         | Enable the Corosync collector (default: enabled).
+collector.sbd                              | Enable the SBD collector (default: enabled).
+collector.drbd                             | Enable the DRBD collector (default: enabled).
+collector.timeout                          | Timeout for system commands execution (default `10s`).
 crm-mon-path                               | Path to crm_mon executable (default `/usr/sbin/crm_mon`).
 cibadmin-path                              | Path to cibadmin executable (default `/usr/sbin/cibadmin`).
 corosync-cfgtoolpath-path                  | Path to corosync-cfgtool executable (default `/usr/sbin/corosync-cfgtool`).

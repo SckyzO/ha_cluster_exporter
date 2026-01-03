@@ -1,6 +1,7 @@
 package sbd
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -23,16 +25,17 @@ const SBD_STATUS_UNHEALTHY = "unhealthy"
 const SBD_STATUS_HEALTHY = "healthy"
 
 // NewCollector create a new sbd collector
-func NewCollector(sbdPath string, sbdConfigPath string, timestamps bool, logger log.Logger) (*sbdCollector, error) {
+func NewCollector(sbdPath string, sbdConfigPath string, timeout time.Duration, logger log.Logger) (*sbdCollector, error) {
 	err := checkArguments(sbdPath, sbdConfigPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not initialize '%s' collector", subsystem)
+		level.Warn(logger).Log("msg", "could not initialize 'sbd' collector (missing executables or config), but continuing", "err", err)
 	}
 
 	c := &sbdCollector{
-		collector.NewDefaultCollector(subsystem, timestamps, logger),
+		collector.NewDefaultCollector(subsystem, logger),
 		sbdPath,
 		sbdConfigPath,
+		timeout,
 	}
 
 	c.SetDescriptor("devices", "SBD devices; one line per device", []string{"device", "status"})
@@ -55,6 +58,7 @@ type sbdCollector struct {
 	collector.DefaultCollector
 	sbdPath       string
 	sbdConfigPath string
+	timeout       time.Duration
 }
 
 func (c *sbdCollector) CollectWithError(ch chan<- prometheus.Metric) error {
@@ -138,7 +142,9 @@ func getSbdDevices(sbdConfigRaw []byte) []string {
 func (c *sbdCollector) getSbdDeviceStatuses(sbdDevices []string) map[string]string {
 	sbdStatuses := make(map[string]string)
 	for _, sbdDev := range sbdDevices {
-		_, err := exec.Command(c.sbdPath, "-d", sbdDev, "dump").Output()
+		ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+		defer cancel()
+		_, err := exec.CommandContext(ctx, c.sbdPath, "-d", sbdDev, "dump").Output()
 
 		// in case of error the device is not healthy
 		if err != nil {
@@ -156,7 +162,9 @@ func (c *sbdCollector) getSbdTimeouts(sbdDevices []string) (map[string]float64, 
 	sbdWatchdogs := make(map[string]float64)
 	sbdMsgWaits := make(map[string]float64)
 	for _, sbdDev := range sbdDevices {
-		sbdDump, _ := exec.Command(c.sbdPath, "-d", sbdDev, "dump").Output()
+		ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+		defer cancel()
+		sbdDump, _ := exec.CommandContext(ctx, c.sbdPath, "-d", sbdDev, "dump").Output()
 
 		regexW := regexp.MustCompile(`Timeout \(msgwait\)  *: \d+`)
 		regex := regexp.MustCompile(`Timeout \(watchdog\)  *: \d+`)

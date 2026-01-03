@@ -1,12 +1,14 @@
 package drbd
 
 import (
+	"context"
 	"encoding/json"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -48,16 +50,17 @@ type drbdStatus struct {
 	} `json:"connections"`
 }
 
-func NewCollector(drbdSetupPath string, drbdSplitBrainPath string, timestamps bool, logger log.Logger) (*drbdCollector, error) {
+func NewCollector(drbdSetupPath string, drbdSplitBrainPath string, timeout time.Duration, logger log.Logger) (*drbdCollector, error) {
 	err := collector.CheckExecutables(drbdSetupPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not initialize '%s' collector", subsystem)
+		level.Warn(logger).Log("msg", "could not initialize 'drbd' collector (missing executables), but continuing", "err", err)
 	}
 
 	c := &drbdCollector{
-		collector.NewDefaultCollector(subsystem, timestamps, logger),
+		collector.NewDefaultCollector(subsystem, logger),
 		drbdSetupPath,
 		drbdSplitBrainPath,
+		timeout,
 	}
 
 	c.SetDescriptor("resources", "The DRBD resources; 1 line per name, per volume", []string{"resource", "role", "volume", "disk_state"})
@@ -83,6 +86,7 @@ type drbdCollector struct {
 	collector.DefaultCollector
 	drbdsetupPath      string
 	drbdSplitBrainPath string
+	timeout            time.Duration
 }
 
 func (c *drbdCollector) CollectWithError(ch chan<- prometheus.Metric) error {
@@ -90,7 +94,10 @@ func (c *drbdCollector) CollectWithError(ch chan<- prometheus.Metric) error {
 
 	c.recordDrbdSplitBrainMetric(ch)
 
-	drbdStatusRaw, err := exec.Command(c.drbdsetupPath, "status", "--json").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	drbdStatusRaw, err := exec.CommandContext(ctx, c.drbdsetupPath, "status", "--json").Output()
 	if err != nil {
 		return errors.Wrap(err, "drbdsetup command failed")
 	}

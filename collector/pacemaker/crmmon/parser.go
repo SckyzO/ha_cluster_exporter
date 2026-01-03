@@ -1,8 +1,10 @@
 package crmmon
 
 import (
+	"context"
 	"encoding/xml"
 	"os/exec"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -13,10 +15,14 @@ type Parser interface {
 
 type crmMonParser struct {
 	crmMonPath string
+	timeout    time.Duration
 }
 
 func (c *crmMonParser) Parse() (crmMon Root, err error) {
-	crmMonXML, err := exec.Command(c.crmMonPath, "-X", "--inactive").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	crmMonXML, err := exec.CommandContext(ctx, c.crmMonPath, "-X", "--inactive").Output()
 	if err != nil {
 		return crmMon, errors.Wrap(err, "error while executing crm_mon")
 	}
@@ -29,6 +35,6 @@ func (c *crmMonParser) Parse() (crmMon Root, err error) {
 	return crmMon, nil
 }
 
-func NewCrmMonParser(crmMonPath string) *crmMonParser {
-	return &crmMonParser{crmMonPath}
+func NewCrmMonParser(crmMonPath string, timeout time.Duration) *crmMonParser {
+	return &crmMonParser{crmMonPath, timeout}
 }

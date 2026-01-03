@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -54,11 +55,12 @@ var (
 	haClusterDrbdsetupPath           *string
 	haClusterDrbdsplitbrainPath      *string
 
-	// deprecated flags
-	enableTimestampsDeprecated *bool
-	portDeprecated             *int
-	addressDeprecated          *string
-	logLevelDeprecated         *string
+	// collector enable flags
+	enablePacemakerCollector *bool
+	enableCorosyncCollector  *bool
+	enableSbdCollector       *bool
+	enableDrbdCollector      *bool
+	commandTimeout           *time.Duration
 
 	promlogConfig = &promlog.Config{
 		Level:  &promlog.AllowedLevel{},
@@ -124,22 +126,28 @@ func init() {
 		"drbdsplitbrain-path",
 		"path to drbd splitbrain hooks temporary files",
 	).PlaceHolder("/var/run/drbd/splitbrain").Default(setConfigDefault("drbdsplitbrain-path", "/var/run/drbd/splitbrain")).String()
-	enableTimestampsDeprecated = kingpin.Flag(
-		"enable-timestamps",
-		"[DEPRECATED] server-side metric timestamping is discouraged by Prometheus best-practices and should be avoided",
-	).PlaceHolder("false").Default(setConfigDefault("enable-timestamps", "false")).Bool()
-	addressDeprecated = kingpin.Flag(
-		"address",
-		"[DEPRECATED] please use --web.listen-address or --web.config.file to use Prometheus Exporter Toolkit",
-	).PlaceHolder("0.0.0.0").Default(setConfigDefault("address", "0.0.0.0")).String()
-	portDeprecated = kingpin.Flag(
-		"port",
-		"[DEPRECATED] please use --web.listen-address or --web.config.file to use Prometheus Exporter Toolkit",
-	).PlaceHolder("9664").Default(setConfigDefault("port", "9664")).Int()
-	logLevelDeprecated = kingpin.Flag(
-		"log-level",
-		"[DEPRECATED] please user log.level",
-	).PlaceHolder("info").Default(setConfigDefault("log-level", "info")).String()
+
+	enablePacemakerCollector = kingpin.Flag(
+		"collector.pacemaker",
+		"Enable the Pacemaker collector (default: enabled).",
+	).Default(setConfigDefault("collector.pacemaker", "true")).Bool()
+	enableCorosyncCollector = kingpin.Flag(
+		"collector.corosync",
+		"Enable the Corosync collector (default: enabled).",
+	).Default(setConfigDefault("collector.corosync", "true")).Bool()
+	enableSbdCollector = kingpin.Flag(
+		"collector.sbd",
+		"Enable the SBD collector (default: enabled).",
+	).Default(setConfigDefault("collector.sbd", "true")).Bool()
+	enableDrbdCollector = kingpin.Flag(
+		"collector.drbd",
+		"Enable the DRBD collector (default: enabled).",
+	).Default(setConfigDefault("collector.drbd", "true")).Bool()
+
+	commandTimeout = kingpin.Flag(
+		"collector.timeout",
+		"Timeout for system commands execution",
+	).PlaceHolder("10s").Default(setConfigDefault("collector.timeout", "10s")).Duration()
 
 	// cannot use as setConfigDefault function will not work here
 	// log.level and log.format flags are set in vars/init
@@ -168,11 +176,6 @@ func init() {
 
 	kingpin.Parse()
 
-	// use deprecated log-level parameter if set
-	if *logLevelDeprecated != "info" {
-		*logLevel = *logLevelDeprecated
-	}
-
 	err = promlogConfig.Level.Set(*logLevel)
 	if err != nil {
 		fmt.Printf("%s: error: %s, try --help\n", namespace, err)
@@ -198,52 +201,60 @@ func setConfigDefault(configName string, configDefault string) string {
 }
 
 func registerCollectors(logger log.Logger) (collectors []prometheus.Collector, errors []error) {
-	pacemakerCollector, err := pacemaker.NewCollector(
-		*haClusterCrmMonPath,
-		*haClusterCibadminPath,
-		*enableTimestampsDeprecated,
-		logger,
-	)
-	if err != nil {
-		errors = append(errors, err)
-	} else {
-		collectors = append(collectors, pacemakerCollector)
+	if *enablePacemakerCollector {
+		pacemakerCollector, err := pacemaker.NewCollector(
+			*haClusterCrmMonPath,
+			*haClusterCibadminPath,
+			*commandTimeout,
+			logger,
+		)
+		if err != nil {
+			errors = append(errors, err)
+		} else {
+			collectors = append(collectors, pacemakerCollector)
+		}
 	}
 
-	corosyncCollector, err := corosync.NewCollector(
-		*haClusterCorosyncCfgtoolpathPath,
-		*haClusterCorosyncQuorumtoolPath,
-		*enableTimestampsDeprecated,
-		logger,
-	)
-	if err != nil {
-		errors = append(errors, err)
-	} else {
-		collectors = append(collectors, corosyncCollector)
+	if *enableCorosyncCollector {
+		corosyncCollector, err := corosync.NewCollector(
+			*haClusterCorosyncCfgtoolpathPath,
+			*haClusterCorosyncQuorumtoolPath,
+			*commandTimeout,
+			logger,
+		)
+		if err != nil {
+			errors = append(errors, err)
+		} else {
+			collectors = append(collectors, corosyncCollector)
+		}
 	}
 
-	sbdCollector, err := sbd.NewCollector(
-		*haClusterSbdPath,
-		*haClusterSbdConfigPath,
-		*enableTimestampsDeprecated,
-		logger,
-	)
-	if err != nil {
-		errors = append(errors, err)
-	} else {
-		collectors = append(collectors, sbdCollector)
+	if *enableSbdCollector {
+		sbdCollector, err := sbd.NewCollector(
+			*haClusterSbdPath,
+			*haClusterSbdConfigPath,
+			*commandTimeout,
+			logger,
+		)
+		if err != nil {
+			errors = append(errors, err)
+		} else {
+			collectors = append(collectors, sbdCollector)
+		}
 	}
 
-	drbdCollector, err := drbd.NewCollector(
-		*haClusterDrbdsetupPath,
-		*haClusterDrbdsplitbrainPath,
-		*enableTimestampsDeprecated,
-		logger,
-	)
-	if err != nil {
-		errors = append(errors, err)
-	} else {
-		collectors = append(collectors, drbdCollector)
+	if *enableDrbdCollector {
+		drbdCollector, err := drbd.NewCollector(
+			*haClusterDrbdsetupPath,
+			*haClusterDrbdsplitbrainPath,
+			*commandTimeout,
+			logger,
+		)
+		if err != nil {
+			errors = append(errors, err)
+		} else {
+			collectors = append(collectors, drbdCollector)
+		}
 	}
 
 	for i, c := range collectors {
@@ -294,14 +305,7 @@ func main() {
 		prometheus.Unregister(prometheus.NewGoCollector())
 	}
 
-	var fullListenAddress string
-	// use deprecated parameters
-	if *addressDeprecated != "0.0.0.0" || *portDeprecated != 9664 {
-		fullListenAddress = fmt.Sprintf("%s:%d", *addressDeprecated, *portDeprecated)
-		// use new parameters
-	} else {
-		fullListenAddress = *webListenAddress
-	}
+	fullListenAddress := *webListenAddress
 	serveAddress := &http.Server{Addr: fullListenAddress}
 	servePath := *webTelemetryPath
 
@@ -346,8 +350,12 @@ func main() {
 	_, err = os.Stat(*webConfig)
 
 	if err != nil {
-		level.Warn(logger).Log("msg", "Reading web config file failed", "err", err)
-		level.Info(logger).Log("msg", "Default web config or commandline values will be used")
+		if *webConfig == "/etc/"+namespace+".web.yaml" && os.IsNotExist(err) {
+			level.Info(logger).Log("msg", "Web config file not found at default location, using default web settings")
+		} else {
+			level.Warn(logger).Log("msg", "Reading web config file failed", "err", err)
+			level.Info(logger).Log("msg", "Default web config or commandline values will be used")
+		}
 		listen = web.ListenAndServe(serveAddress, toolkitFlags, logger)
 	} else {
 		level.Info(logger).Log("msg", "Using web config file: "+*webConfig)

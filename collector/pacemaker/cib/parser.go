@@ -1,8 +1,10 @@
 package cib
 
 import (
+	"context"
 	"encoding/xml"
 	"os/exec"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -13,11 +15,15 @@ type Parser interface {
 
 type cibAdminParser struct {
 	cibAdminPath string
+	timeout      time.Duration
 }
 
 func (p *cibAdminParser) Parse() (Root, error) {
 	var CIB Root
-	cibXML, err := exec.Command(p.cibAdminPath, "--query", "--local").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
+	defer cancel()
+
+	cibXML, err := exec.CommandContext(ctx, p.cibAdminPath, "--query", "--local").Output()
 	if err != nil {
 		return CIB, errors.Wrap(err, "error while executing cibadmin")
 	}
@@ -30,6 +36,6 @@ func (p *cibAdminParser) Parse() (Root, error) {
 	return CIB, nil
 }
 
-func NewCibAdminParser(cibAdminPath string) *cibAdminParser {
-	return &cibAdminParser{cibAdminPath}
+func NewCibAdminParser(cibAdminPath string, timeout time.Duration) *cibAdminParser {
+	return &cibAdminParser{cibAdminPath, timeout}
 }

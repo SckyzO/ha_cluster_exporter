@@ -1,7 +1,9 @@
 package corosync
 
 import (
+	"context"
 	"os/exec"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -13,16 +15,17 @@ import (
 
 const subsystem = "corosync"
 
-func NewCollector(cfgToolPath string, quorumToolPath string, timestamps bool, logger log.Logger) (*corosyncCollector, error) {
+func NewCollector(cfgToolPath string, quorumToolPath string, timeout time.Duration, logger log.Logger) (*corosyncCollector, error) {
 	err := collector.CheckExecutables(cfgToolPath, quorumToolPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not initialize '%s' collector", subsystem)
+		level.Warn(logger).Log("msg", "could not initialize 'corosync' collector (missing executables), but continuing", "err", err)
 	}
 
 	c := &corosyncCollector{
-		collector.NewDefaultCollector(subsystem, timestamps, logger),
+		collector.NewDefaultCollector(subsystem, logger),
 		cfgToolPath,
 		quorumToolPath,
+		timeout,
 		NewParser(),
 	}
 	c.SetDescriptor("quorate", "Whether or not the cluster is quorate", nil)
@@ -38,15 +41,19 @@ type corosyncCollector struct {
 	collector.DefaultCollector
 	cfgToolPath    string
 	quorumToolPath string
+	timeout        time.Duration
 	parser         Parser
 }
 
 func (c *corosyncCollector) CollectWithError(ch chan<- prometheus.Metric) error {
 	level.Debug(c.Logger).Log("msg", "Collecting corosync metrics...")
 
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
 	// We suppress the exec errors because if any interface is faulty the tools will exit with code 1, but we still want to parse the output.
-	cfgToolOutput, _ := exec.Command(c.cfgToolPath, "-s").Output()
-	quorumToolOutput, _ := exec.Command(c.quorumToolPath, "-p").Output()
+	cfgToolOutput, _ := exec.CommandContext(ctx, c.cfgToolPath, "-s").Output()
+	quorumToolOutput, _ := exec.CommandContext(ctx, c.quorumToolPath, "-p").Output()
 
 	status, err := c.parser.Parse(cfgToolOutput, quorumToolOutput)
 	if err != nil {

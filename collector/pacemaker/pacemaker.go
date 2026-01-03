@@ -18,16 +18,16 @@ import (
 
 const subsystem = "pacemaker"
 
-func NewCollector(crmMonPath string, cibAdminPath string, timestamps bool, logger log.Logger) (*pacemakerCollector, error) {
+func NewCollector(crmMonPath string, cibAdminPath string, timeout time.Duration, logger log.Logger) (*pacemakerCollector, error) {
 	err := collector.CheckExecutables(crmMonPath, cibAdminPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not initialize '%s' collector", subsystem)
+		level.Warn(logger).Log("msg", "could not initialize 'pacemaker' collector (missing executables), but continuing", "err", err)
 	}
 
 	c := &pacemakerCollector{
-		collector.NewDefaultCollector(subsystem, timestamps, logger),
-		crmmon.NewCrmMonParser(crmMonPath),
-		cib.NewCibAdminParser(cibAdminPath),
+		collector.NewDefaultCollector(subsystem, logger),
+		crmmon.NewCrmMonParser(crmMonPath, timeout),
+		cib.NewCibAdminParser(cibAdminPath, timeout),
 	}
 	c.SetDescriptor("nodes", "The status of each node in the cluster; 1 means the node is in that status, 0 otherwise", []string{"node", "type", "status"})
 	c.SetDescriptor("node_attributes", "Metadata attributes of each node; value is always 1", []string{"node", "name", "value"})
